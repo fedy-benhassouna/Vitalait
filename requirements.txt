@@ -1,0 +1,5 @@
+pandas
+streamlit
+fpdf
+openpyxl
+xlrd=2.0.1
