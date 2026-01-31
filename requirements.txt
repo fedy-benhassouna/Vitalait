@@ -3,4 +3,7 @@ streamlit
 fpdf
 openpyxl
 xlrd==2.0.1
+altair==4.2.0
+
+
 
