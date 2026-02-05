@@ -185,6 +185,32 @@ class QXMatrixAnalyzer:
         
         return components
     
+    def get_component_parameters_mapping(self, parameters_with_components):
+        """
+        Create a component-to-parameters mapping (inverse of parameters-to-components).
+        Allows duplicates - each component can be linked to multiple parameters.
+        
+        Args:
+            parameters_with_components: List of dicts with 'name', 'value', 'components'
+        
+        Returns:
+            Dict mapping component_name -> list of parameter dicts
+        """
+        mapping = {}
+        
+        for param in parameters_with_components:
+            for component in param['components']:
+                if component not in mapping:
+                    mapping[component] = []
+                
+                # Add parameter info (allows duplicates)
+                mapping[component].append({
+                    'param_name': param['name'],
+                    'param_value': param['value']
+                })
+        
+        return mapping
+    
     def get_parametres(self, sous_ensemble_name):
         """
         Get parameters linked to components in a sub-assembly.
@@ -409,6 +435,69 @@ def display_hierarchy(result):
         st.warning("Aucun paramètre trouvé")
 
 
+def display_components_to_parameters(analyzer, result):
+    """Display mapping: each component linked to its parameters"""
+    st.markdown("---")
+    
+    # Create the mapping
+    comp_to_params = analyzer.get_component_parameters_mapping(result['parametres'])
+    
+    st.markdown(f"### 🔗 Composants et leurs Paramètres ({len(comp_to_params)})")
+    
+    if not comp_to_params:
+        st.warning("Aucune liaison composant-paramètre trouvée")
+        return
+    
+    # Sort components alphabetically
+    sorted_components = sorted(comp_to_params.keys())
+    
+    # Display each component with its parameters
+    for comp_name in sorted_components:
+        params = comp_to_params[comp_name]
+        with st.expander(f"**⚙️ {comp_name}**", expanded=False):
+            st.write(f"**Nombre de paramètres:** {len(params)}")
+            
+            for idx, param in enumerate(params, 1):
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.write(f"**{idx}.**")
+                with col2:
+                    st.write(f"**{param['param_name']}**")
+                    if param['param_value']:
+                        st.write(f"*Action: {param['param_value']}*")
+    
+    # Export as CSV
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Create CSV data
+        csv_data = []
+        for comp_name in sorted_components:
+            params = comp_to_params[comp_name]
+            for param in params:
+                csv_data.append({
+                    'Composant': comp_name,
+                    'Paramètre': param['param_name'],
+                    'Action': param['param_value']
+                })
+        
+        df_export = pd.DataFrame(csv_data)
+        csv = df_export.to_csv(index=False)
+        
+        st.download_button(
+            label="📥 Télécharger Composants → Paramètres (CSV)",
+            data=csv,
+            file_name=f"composants_parametres_{result['defect_name']}.csv",
+            mime="text/csv"
+        )
+    
+    with col2:
+        # Display stats
+        st.metric("Composants uniques", len(comp_to_params))
+        st.metric("Liaisons totales", sum(len(p) for p in comp_to_params.values()))
+
+
 def export_to_pdf(result):
     """Export hierarchy to PDF format"""
     try:
@@ -588,7 +677,14 @@ def main():
             
             st.success(f"✓ Analyse terminée en {elapsed*1000:.1f} ms")
             
-            display_hierarchy(result)
+            # Sub-tabs for different views
+            subtab1, subtab2 = st.tabs(["📋 Vue Hiérarchique", "🔗 Composants → Paramètres"])
+            
+            with subtab1:
+                display_hierarchy(result)
+            
+            with subtab2:
+                display_components_to_parameters(analyzer, result)
     
     with tab3:
         st.header("Recherche par mot-clé")
